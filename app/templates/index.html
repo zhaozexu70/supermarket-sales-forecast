@@ -1,0 +1,85 @@
+{% extends "base.html" %}
+{% block title %}首页{% endblock %}
+{% block content %}
+<h4 class="page-title">数据概览</h4>
+
+<div class="row g-3 mb-3">
+  <div class="col-6 col-lg-3"><div class="card stat-card"><div class="card-body">
+    <div class="stat-label">订单行数</div><div class="stat-value" id="statRows">{{ info.n_rows }}</div>
+    <div class="stat-note">一行是一笔订单里的一种商品</div></div></div></div>
+  <div class="col-6 col-lg-3"><div class="card stat-card"><div class="card-body">
+    <div class="stat-label">订单数</div><div class="stat-value" id="statOrders">{{ info.n_orders }}</div>
+    <div class="stat-note">按订单键去重后的订单笔数</div></div></div></div>
+  <div class="col-12 col-lg-3"><div class="card stat-card"><div class="card-body">
+    <div class="stat-label">时间范围</div>
+    <div class="stat-value stat-date" id="statDates">
+      {% if info.first_day %}{{ info.first_day }} 至 {{ info.last_day }}{% else %}暂无数据{% endif %}</div>
+    <div class="stat-note">最早和最晚的订单日期</div></div></div></div>
+  <div class="col-12 col-lg-3"><div class="card stat-card"><div class="card-body">
+    <div class="stat-label">数据来源（行数）</div>
+    <div class="stat-sources" id="statSources">
+      {% for name, n in info.sources %}<span>{{ name }} <b>{{ n }}</b></span>{% endfor %}</div>
+    <div class="stat-note">导入、录入的数据可以在导入记录里撤销</div></div></div></div>
+</div>
+
+<div class="row g-3 mb-3">
+  <div class="col-lg-5">
+    <div class="card h-100"><div class="card-body">
+      <h6 class="card-title">各年份的数据状态</h6>
+      <table class="table table-sm align-middle mb-2" id="yearTable">
+        <thead><tr><th>年份</th><th>订单行数</th><th>有订单的月份</th><th>处理状态</th></tr></thead>
+        <tbody>
+          {% for y in years %}
+          <tr>
+            <td>{{ y.year }}</td><td>{{ y.rows }}</td>
+            <td>{{ y.months }} 个月{% if not y.complete %}<span class="text-muted">（不完整）</span>{% endif %}</td>
+            <td><span class="badge {% if y.processed %}text-bg-success{% else %}text-bg-warning{% endif %}">{{ y.status }}</span></td>
+          </tr>
+          {% else %}
+          <tr><td colspan="4" class="text-muted">还没有订单数据</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      <div class="stat-note">数据有变动的年份要先到“数据处理和展示”重新处理，才能用于预测。</div>
+    </div></div>
+  </div>
+  <div class="col-lg-7">
+    <div class="card h-100"><div class="card-body">
+      <h6 class="card-title">月度销售额走势</h6>
+      <div id="salesChart" class="chart-small"></div>
+    </div></div>
+  </div>
+</div>
+
+<div class="card"><div class="card-body">
+  <h6 class="card-title">功能入口</h6>
+  <div class="row g-2">
+    {% set notes = {"数据导入和展示": "查看、导入、录入订单", "数据处理和展示": "清洗并按月汇总",
+                    "销售分析": "趋势、地区、品类图表", "数据预测": "预测下一年的月销量",
+                    "预测结果": "预测值、安全库存、进货量"} %}
+    {% for name, endpoint in nav_items if name != "首页" %}
+    <div class="col-6 col-lg">
+      <a class="module-link" href="{{ url_for(endpoint) }}"><b>{{ name }}</b><span>{{ notes[name] }}</span></a>
+    </div>
+    {% endfor %}
+  </div>
+</div></div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='vendor/echarts/echarts.min.js') }}"></script>
+<script>
+  // 月度销售额走势：数据由服务器直接写在页面里
+  const chartData = {{ chart | tojson }};
+  const chart = echarts.init(document.getElementById("salesChart"));
+  chart.setOption({
+    tooltip: { trigger: "axis", valueFormatter: v => (v / 10000).toFixed(1) + " 万元" },
+    grid: { left: 60, right: 20, top: 20, bottom: 30 },
+    xAxis: { type: "category", data: chartData.months },
+    yAxis: { type: "value", name: "", axisLabel: { formatter: v => v / 10000 + " 万" } },
+    series: [{ name: "销售额", type: "line", smooth: true, showSymbol: false,
+               areaStyle: { opacity: 0.12 }, data: chartData.sales }]
+  });
+  window.addEventListener("resize", () => chart.resize());
+</script>
+{% endblock %}

@@ -1,0 +1,229 @@
+{% extends "base.html" %}
+{% block title %}数据处理和展示{% endblock %}
+
+{# 处理摘要里的一步：标题、数字、一句说明 #}
+{% macro step(element_id, title, value, note) %}
+<div class="pipe-step">
+  <div class="pipe-title">{{ title }}</div>
+  <div class="pipe-value" id="{{ element_id }}">{{ value }}</div>
+  <div class="pipe-note">{{ note }}</div>
+</div>
+{% endmacro %}
+
+{% block content %}
+<h4 class="page-title">数据处理和展示</h4>
+
+<div class="row g-3 mb-3">
+  <div class="col-lg-5">
+    <div class="card h-100"><div class="card-body">
+      <h6 class="card-title">选择年份范围</h6>
+      <form method="post" action="{{ url_for('process.run') }}" id="runForm" class="row g-2 align-items-end">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="col-4">
+          <label class="form-label" for="start_year">起始年</label>
+          <select class="form-select" id="start_year" name="start_year">
+            {% for y in years %}<option {% if loop.first %}selected{% endif %}>{{ y.year }}</option>{% endfor %}
+          </select>
+        </div>
+        <div class="col-4">
+          <label class="form-label" for="end_year">结束年</label>
+          <select class="form-select" id="end_year" name="end_year">
+            {% for y in years %}<option {% if loop.last %}selected{% endif %}>{{ y.year }}</option>{% endfor %}
+          </select>
+        </div>
+        <div class="col-4">
+          <button class="btn btn-primary w-100" type="submit" id="runBtn" {% if not years %}disabled{% endif %}>开始处理</button>
+        </div>
+      </form>
+      <div class="stat-note mt-3">
+        处理所选年份的全部订单（不分地区、类别）：去空格 → 找重复录入 → 去掉不合规的行 → 标记异常值 → 按月汇总并补零，
+        然后重新生成月度汇总表。分析和预测用的都是处理后的月度汇总表。
+      </div>
+    </div></div>
+  </div>
+  <div class="col-lg-7">
+    <div class="card h-100"><div class="card-body">
+      <h6 class="card-title">各年份的处理状态</h6>
+      <table class="table table-sm align-middle mb-2" id="yearTable">
+        <thead><tr><th>年份</th><th>订单行数</th><th>有订单的月份</th><th>是否完整年份</th><th>处理状态</th></tr></thead>
+        <tbody>
+          {% for y in years %}
+          <tr data-year="{{ y.year }}">
+            <td>{{ y.year }}</td><td>{{ y.rows }}</td><td>{{ y.months }} 个月</td>
+            <td>{% if y.complete %}完整{% else %}<span class="text-muted">不完整</span>{% endif %}</td>
+            <td><span class="badge {% if y.processed %}text-bg-success{% else %}text-bg-warning{% endif %}">{{ y.status }}</span></td>
+          </tr>
+          {% else %}
+          <tr><td colspan="5" class="text-muted">还没有订单数据</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      <div class="stat-note">某一年的订单有增加或删除后，这一年要重新处理。12 个月都有订单的年份才算完整年份，预测只用完整年份。</div>
+    </div></div>
+  </div>
+</div>
+
+{% if log %}
+<div class="card mb-3" id="summary"><div class="card-body">
+  <h6 class="card-title">处理摘要
+    <small class="text-muted fw-normal ms-2" id="summaryHead">{{ log.start_year }}–{{ log.end_year }} 年，
+      {{ log.created_at.strftime("%Y-%m-%d %H:%M:%S") }}，{{ log.username or "阶段一的处理结果（升级数据库时补记）" }}</small></h6>
+  <div class="pipeline">
+    {{ step("sumRows", "① 读取订单", log.order_rows, "行") }}
+    <div class="pipe-arrow">→</div>
+    {{ step("sumDuplicates", "② 重复录入", log.duplicate_rows, "行，只留一条") }}
+    <div class="pipe-arrow">→</div>
+    {{ step("sumInvalid", "③ 不合规", log.invalid_rows, "行，已排除") }}
+    <div class="pipe-arrow">→</div>
+    <div class="pipe-step">
+      <div class="pipe-title">④ 异常值</div>
+      <div class="pipe-value pipe-double"><span id="sumOutlierSales">{{ log.outlier_sales }}</span> / <span id="sumOutlierProfit">{{ log.outlier_profit }}</span></div>
+      <div class="pipe-note">销售额 / 利润，行</div>
+    </div>
+    <div class="pipe-arrow">→</div>
+    {{ step("sumMonths", "⑤ 按月汇总", log.month_count, "个月") }}
+    <div class="pipe-arrow">→</div>
+    <div class="pipe-step">
+      <div class="pipe-title">⑥ 补零</div>
+      <div class="pipe-value pipe-double"><span id="sumZeroSub">{{ log.zero_filled_sub }}</span> / <span id="sumZeroCat">{{ log.zero_filled_cat }}</span></div>
+      <div class="pipe-note">子类别级 / 类别级，格</div>
+    </div>
+    <div class="pipe-arrow">→</div>
+    {{ step("sumSeconds", "总用时", "%.2f"|format(log.seconds) if log.seconds is not none else "—", "秒") }}
+  </div>
+  <div class="stat-note mt-2">异常值按所选年份范围统计，只标记不删除：大额订单和亏损订单是真实的业务情况，删掉会低估销量。
+    不合规指发货早于下单、数量或销售额不大于 0、折扣不在 0 到 1 之间。升级数据库时补记的那一条没有用时。</div>
+</div></div>
+{% endif %}
+
+<div class="card" id="result"><div class="card-body">
+  <h6 class="card-title">处理结果：月度汇总</h6>
+  {% if stale %}
+  <div class="alert alert-warning py-2" id="staleNote">{{ stale|join("、") }} 年的数据有更新或还没有处理，下面这些年份的结果不是最新的，请先处理。</div>
+  {% endif %}
+  <form method="get" action="{{ url_for('process.index') }}#result" class="row g-2 align-items-end mb-3" id="viewForm">
+    <div class="col-6 col-md-2">
+      <label class="form-label" for="level">汇总层级</label>
+      <select class="form-select form-select-sm" id="level" name="level">
+        <option value="类别" {% if v.level == "类别" %}selected{% endif %}>地区 × 类别</option>
+        <option value="子类别" {% if v.level == "子类别" %}selected{% endif %}>地区 × 子类别</option>
+      </select>
+    </div>
+    <div class="col-6 col-md-2">
+      <label class="form-label" for="region">地区</label>
+      <select class="form-select form-select-sm" id="region" name="region">
+        <option value="">全部</option>
+        {% for r in regions %}<option {% if v.region == r %}selected{% endif %}>{{ r }}</option>{% endfor %}
+      </select>
+    </div>
+    <div class="col-6 col-md-2">
+      <label class="form-label" for="category">类别</label>
+      <select class="form-select form-select-sm" id="category" name="category">
+        <option value="">全部</option>
+        {% for c in categories %}<option {% if v.category == c %}selected{% endif %}>{{ c }}</option>{% endfor %}
+      </select>
+    </div>
+    <div class="col-6 col-md-2" id="subBox">
+      <label class="form-label" for="sub_category">子类别</label>
+      <select class="form-select form-select-sm" id="sub_category" name="sub_category" data-selected="{{ v.sub_category }}">
+        <option value="">全部</option>
+      </select>
+    </div>
+    <div class="col-6 col-md-1"><button class="btn btn-primary btn-sm w-100" type="submit" id="viewBtn">查看</button></div>
+    <div class="col-6 col-md-3 text-end ms-auto">
+      <a class="btn btn-outline-success btn-sm" id="exportBtn" href="{{ export_url }}">导出 Excel（{{ total }} 行）</a>
+    </div>
+  </form>
+
+  <div class="mb-2" id="zeroNote">
+    {{ v.region or "全部地区" }}、{{ v.category or "全部类别" }}{% if v.level == "子类别" %}、{{ v.sub_category or "全部子类别" }}{% endif %}：
+    按“地区 × {{ v.level }}”汇总，每个组合每个月一格，共 <b id="cellCount">{{ zero.cells }}</b> 格；
+    其中 <b id="zeroCount">{{ zero.zeros }}</b> 格当月没有销售，已补 0。
+  </div>
+
+  <div id="quantityChart" class="chart-medium"></div>
+
+  <div class="d-flex justify-content-between align-items-center mt-3 mb-2">
+    <div>共 <b id="totalCount">{{ total }}</b> 行，第 {{ page }} / {{ pages }} 页，每页 20 行</div>
+  </div>
+  <div class="table-responsive">
+    <table class="table table-sm table-hover align-middle mb-0" id="monthlyTable">
+      <thead class="table-light">
+        <tr><th>年月</th><th>地区</th><th>类别</th>{% if v.level == "子类别" %}<th>子类别</th>{% endif %}
+            <th class="text-end">销售额</th><th class="text-end">数量</th><th class="text-end">利润</th><th class="text-end">订单数</th></tr>
+      </thead>
+      <tbody>
+        {% for r in rows %}
+        <tr {% if r.order_count == 0 %}class="text-muted"{% endif %}>
+          <td>{{ r.ym }}</td><td>{{ r.region }}</td><td>{{ r.category }}</td>{% if v.level == "子类别" %}<td>{{ r.sub_category }}</td>{% endif %}
+          <td class="text-end">{{ "%.2f"|format(r.sales) }}</td><td class="text-end">{{ r.quantity }}</td>
+          <td class="text-end {% if r.profit < 0 %}text-danger{% endif %}">{{ "%.2f"|format(r.profit) }}</td>
+          <td class="text-end">{{ r.order_count }}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="8" class="text-center text-muted py-4">还没有处理结果，请先选择年份范围并点“开始处理”</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% if pages > 1 %}
+  <nav class="mt-3"><ul class="pagination pagination-sm justify-content-center mb-0" id="pager">
+    <li class="page-item {% if page == 1 %}disabled{% endif %}"><a class="page-link" href="{{ link(page=1) }}">首页</a></li>
+    <li class="page-item {% if page == 1 %}disabled{% endif %}"><a class="page-link" href="{{ link(page=page - 1) }}">上一页</a></li>
+    {% for p in range([1, page - 2]|max, [pages, page + 2]|min + 1) %}
+    <li class="page-item {% if p == page %}active{% endif %}"><a class="page-link" href="{{ link(page=p) }}">{{ p }}</a></li>
+    {% endfor %}
+    <li class="page-item {% if page == pages %}disabled{% endif %}"><a class="page-link" href="{{ link(page=page + 1) }}">下一页</a></li>
+    <li class="page-item {% if page == pages %}disabled{% endif %}"><a class="page-link" href="{{ link(page=pages) }}">末页</a></li>
+  </ul></nav>
+  {% endif %}
+</div></div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='vendor/echarts/echarts.min.js') }}"></script>
+<script>
+  // ---------- 年份范围：起始年不能晚于结束年；点了“开始处理”后按钮不能再点 ----------
+  const startYear = document.getElementById("start_year");
+  const endYear = document.getElementById("end_year");
+  startYear.addEventListener("change", () => { if (+startYear.value > +endYear.value) endYear.value = startYear.value; });
+  endYear.addEventListener("change", () => { if (+endYear.value < +startYear.value) startYear.value = endYear.value; });
+  document.getElementById("runForm").addEventListener("submit", e => {
+    const btn = document.getElementById("runBtn");
+    if (btn.disabled) { e.preventDefault(); return; }
+    btn.disabled = true;
+    btn.textContent = "正在处理…";
+  });
+
+  // ---------- 查看结果：子类别只在“地区 × 子类别”层级出现，并随类别联动 ----------
+  const categorySubs = {{ category_subs | tojson }};
+  const level = document.getElementById("level");
+  const category = document.getElementById("category");
+  const sub = document.getElementById("sub_category");
+
+  function fillSubs(keep) {
+    document.getElementById("subBox").classList.toggle("d-none", level.value !== "子类别");
+    const subs = category.value ? categorySubs[category.value] : Object.values(categorySubs).flat();
+    sub.innerHTML = '<option value="">全部</option>';
+    for (const s of subs) sub.add(new Option(s, s, false, s === keep));
+  }
+  fillSubs(sub.dataset.selected);
+  level.addEventListener("change", () => fillSubs(""));
+  category.addEventListener("change", () => fillSubs(""));
+
+  // ---------- 月度销量走势图：下面的滑块可以拖动，只看某一段时间 ----------
+  const chartData = {{ chart | tojson }};
+  const chart = echarts.init(document.getElementById("quantityChart"));
+  chart.setOption({
+    title: { text: "月度销量（件）", left: "center", textStyle: { fontSize: 14 } },
+    tooltip: { trigger: "axis", valueFormatter: v => v + " 件" },
+    grid: { left: 60, right: 30, top: 40, bottom: 80 },
+    xAxis: { type: "category", data: chartData.months },
+    yAxis: { type: "value" },
+    dataZoom: [{ type: "slider", bottom: 20 }, { type: "inside" }],
+    series: [{ name: "销量", type: "line", smooth: true, showSymbol: false,
+               areaStyle: { opacity: 0.12 }, data: chartData.quantity }]
+  });
+  window.addEventListener("resize", () => chart.resize());
+</script>
+{% endblock %}

@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+{% set active_nav = "data.orders" %}
+{% block title %}导入记录{% endblock %}
+{% block content %}
+<h4 class="page-title">数据导入和展示 <small class="text-muted">导入记录</small></h4>
+{% include "_data_tabs.html" %}
+
+<div class="d-flex justify-content-between align-items-center mb-2">
+  <div>共 <b>{{ batches|length }}</b> 个批次；库里现在有 <b id="importedCount">{{ imported }}</b> 条导入或录入的订单</div>
+  <button class="btn btn-outline-danger btn-sm" id="restoreBtn" type="button" {% if not imported %}disabled{% endif %}
+          data-url="{{ url_for('data.batch_restore') }}" data-title="恢复原始数据"
+          data-text="将删除全部 {{ imported }} 条导入和录入的订单，只留下原始数据，所有批次标为已撤销。恢复后，受影响的年份需要重新处理。">恢复原始数据</button>
+</div>
+
+<div class="card"><div class="table-responsive">
+  <table class="table table-sm table-hover align-middle mb-0" id="batchTable">
+    <thead class="table-light">
+      <tr><th>批次号</th><th>方式</th><th>文件名</th><th class="text-end">总行数</th><th class="text-end">成功</th>
+          <th class="text-end">失败</th><th class="text-end">跳过</th><th>操作人</th><th>时间</th><th>状态</th><th></th></tr>
+    </thead>
+    <tbody>
+      {% for b in batches %}
+      <tr>
+        <td>{{ b.id }}</td><td>{{ b.method }}</td><td>{{ b.file_name or "—" }}</td>
+        <td class="text-end">{{ b.total_rows }}</td><td class="text-end">{{ b.success_rows }}</td>
+        <td class="text-end">{{ b.failed_rows }}</td><td class="text-end">{{ b.skipped_rows }}</td>
+        <td>{{ b.username or "—" }}</td><td>{{ b.created_at.strftime("%Y-%m-%d %H:%M:%S") }}</td>
+        <td>{% if b.revoked %}<span class="badge text-bg-secondary">已撤销</span>{% else %}<span class="badge text-bg-success">有效</span>{% endif %}</td>
+        <td class="text-end">
+          {% if b.method == "表格导入" %}<a class="btn btn-link btn-sm p-0 me-2" href="{{ url_for('data.import_result', batch_id=b.id) }}">结果</a>{% endif %}
+          {% if not b.revoked %}
+          <button class="btn btn-outline-danger btn-sm py-0 revoke-btn" type="button"
+                  data-url="{{ url_for('data.batch_revoke', batch_id=b.id) }}" data-title="撤销批次 {{ b.id }}"
+                  data-text="将删除批次 {{ b.id }} 导入的 {{ b.current_rows }} 条订单。撤销后，这些订单所在的年份需要重新处理。">撤销</button>
+          {% endif %}
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="11" class="text-center text-muted py-4">还没有导入记录</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div></div>
+<div class="stat-note mt-2">表格导入一次是一个批次；对话框录入每条订单单独是一个批次，录错了可以只撤销这一条。最多显示最近 200 个批次。</div>
+
+{# 撤销、恢复共用的确认对话框：点了“确定”才提交 #}
+<div class="modal fade" id="confirmModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog"><div class="modal-content">
+    <form method="post" id="confirmForm">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div class="modal-header"><h5 class="modal-title" id="confirmTitle"></h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="关闭"></button></div>
+      <div class="modal-body"><p id="confirmText" class="mb-2"></p><p class="mb-0 text-danger">这个操作不能撤回，确定要继续吗？</p></div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+        <button type="submit" class="btn btn-danger" id="confirmOk">确定</button>
+      </div>
+    </form>
+  </div></div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  // 点“撤销”或“恢复原始数据”时先弹出确认对话框，把要提交的网址和说明文字填进去
+  const confirmModal = new bootstrap.Modal(document.getElementById("confirmModal"));
+  for (const btn of document.querySelectorAll(".revoke-btn, #restoreBtn")) {
+    btn.addEventListener("click", () => {
+      document.getElementById("confirmForm").action = btn.dataset.url;
+      document.getElementById("confirmTitle").textContent = btn.dataset.title;
+      document.getElementById("confirmText").textContent = btn.dataset.text;
+      confirmModal.show();
+    });
+  }
+</script>
+{% endblock %}

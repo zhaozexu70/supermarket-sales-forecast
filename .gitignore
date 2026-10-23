@@ -1,0 +1,9 @@
+__pycache__/
+*.pyc
+.pytest_cache/
+.env
+data/raw/*
+data/processed/*
+!data/README.md
+logs/
+tmp_uploads/

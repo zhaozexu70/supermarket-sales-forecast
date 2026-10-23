@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% set active_nav = "data.orders" %}
+{% block title %}导入结果{% endblock %}
+{% block content %}
+<h4 class="page-title">数据导入和展示 <small class="text-muted">导入结果</small></h4>
+{% include "_data_tabs.html" %}
+
+<div class="alert {% if batch.revoked %}alert-secondary{% else %}alert-success{% endif %} py-2" id="resultNote">
+  {% if batch.revoked %}这一批已经撤销，下面是当时的导入结果。{% else %}导入完成。{% endif %}
+  批次号 <b>{{ batch.id }}</b>，文件 <b>{{ batch.file_name or "（手工录入）" }}</b>，
+  导入时间 <b id="importTime">{{ batch.created_at.strftime("%Y-%m-%d %H:%M:%S") }}</b>{% if detail %}，用时 <b id="importSeconds">{{ detail.seconds }}</b> 秒{% endif %}，
+  操作人 {{ batch.username or "—" }}。
+</div>
+
+<div class="row g-3 mb-3">
+  <div class="col-6 col-lg-3"><div class="card stat-card"><div class="card-body">
+    <div class="stat-label">文件总行数</div><div class="stat-value" id="rsTotal">{{ batch.total_rows }}</div></div></div></div>
+  <div class="col-6 col-lg-3"><div class="card stat-card"><div class="card-body">
+    <div class="stat-label">成功导入</div><div class="stat-value text-success" id="rsOk">{{ batch.success_rows }}</div></div></div></div>
+  <div class="col-6 col-lg-3"><div class="card stat-card"><div class="card-body">
+    <div class="stat-label">失败</div><div class="stat-value text-danger" id="rsFailed">{{ batch.failed_rows }}</div></div></div></div>
+  <div class="col-6 col-lg-3"><div class="card stat-card"><div class="card-body">
+    <div class="stat-label">跳过（行 ID 重复）</div><div class="stat-value text-secondary" id="rsSkipped">{{ batch.skipped_rows }}</div></div></div></div>
+</div>
+
+<div class="d-flex gap-2 mb-3">
+  <a class="btn btn-primary btn-sm" href="{{ url_for('data.orders', source=batch.method) }}">查看导入的订单</a>
+  <a class="btn btn-outline-primary btn-sm" href="{{ url_for('data.import_page') }}">继续导入</a>
+  <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('data.batches') }}">导入记录（可撤销）</a>
+  {% if detail and (detail.failed or detail.skipped) %}
+  <a class="btn btn-outline-danger btn-sm ms-auto" id="problemsBtn" href="{{ url_for('data.import_result_problems', batch_id=batch.id) }}">下载失败明细</a>
+  {% endif %}
+</div>
+<div class="stat-note mb-3">新导入的订单所在的年份，要先到“数据处理和展示”重新处理，才能用于分析和预测。</div>
+
+{% if detail %}
+  {% with failed = detail.failed, skipped = detail.skipped %}{% include "_problem_tables.html" %}{% endwith %}
+{% elif batch.failed_rows or batch.skipped_rows %}
+<div class="alert alert-light border py-2">失败和跳过的明细只是临时保存，现在已经清理掉了，这里只剩条数。</div>
+{% endif %}
+{% endblock %}

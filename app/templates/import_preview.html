@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{% set active_nav = "data.orders" %}
+{% block title %}导入预览{% endblock %}
+{% block content %}
+<h4 class="page-title">数据导入和展示 <small class="text-muted">导入预览</small></h4>
+{% include "_data_tabs.html" %}
+
+<div class="alert alert-info py-2" id="previewNote">
+  文件 <b>{{ name }}</b> 已校验，<b>还没有写入数据库</b>。核对下面的结果后，点“确认导入”。
+</div>
+
+<div class="row g-3 mb-3">
+  <div class="col-6 col-lg-3"><div class="card stat-card"><div class="card-body">
+    <div class="stat-label">文件总行数</div><div class="stat-value" id="pvTotal">{{ total }}</div></div></div></div>
+  <div class="col-6 col-lg-3"><div class="card stat-card"><div class="card-body">
+    <div class="stat-label">将导入</div><div class="stat-value text-success" id="pvOk">{{ n_ok }}</div></div></div></div>
+  <div class="col-6 col-lg-3"><div class="card stat-card"><div class="card-body">
+    <div class="stat-label">失败（不导入）</div><div class="stat-value text-danger" id="pvFailed">{{ failed|length }}</div></div></div></div>
+  <div class="col-6 col-lg-3"><div class="card stat-card"><div class="card-body">
+    <div class="stat-label">跳过（行 ID 重复）</div><div class="stat-value text-secondary" id="pvSkipped">{{ skipped|length }}</div></div></div></div>
+</div>
+
+<div class="d-flex gap-2 mb-3">
+  <form method="post" action="{{ url_for('data.import_confirm') }}" class="m-0">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" name="token" value="{{ token }}">
+    <button class="btn btn-success" type="submit" id="confirmBtn" {% if not n_ok %}disabled{% endif %}>确认导入 {{ n_ok }} 行</button>
+  </form>
+  <form method="post" action="{{ url_for('data.import_cancel') }}" class="m-0">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <button class="btn btn-outline-secondary" type="submit">取消</button>
+  </form>
+  {% if failed or skipped %}
+  <a class="btn btn-outline-danger ms-auto" href="{{ url_for('data.import_preview_problems') }}">下载失败明细</a>
+  {% endif %}
+</div>
+{% if not n_ok %}
+<div class="alert alert-warning py-2">没有可以导入的行。请按下面的原因修改文件后重新上传。</div>
+{% endif %}
+
+{% include "_problem_tables.html" %}
+
+{% if rows %}
+<div class="card"><div class="card-body">
+  <h6 class="card-title">将导入的行（前 {{ rows|length }} 行{% if n_ok > rows|length %}，共 {{ n_ok }} 行{% endif %}）</h6>
+  <div class="table-responsive">
+    <table class="table table-sm table-hover align-middle mb-0 order-table" id="previewTable">
+      <thead class="table-light"><tr>{% for c in columns %}<th>{{ c }}</th>{% endfor %}</tr></thead>
+      <tbody>
+        {% for r in rows %}
+        <tr>{% for c in columns %}<td {% if c == "产品名称" %}class="product-name" title="{{ r[c] }}"{% endif %}>{{ r[c] }}</td>{% endfor %}</tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <div class="stat-note mt-2">“行 ID”一列是系统准备使用的编号：留空的行已经按顺序自动编号。</div>
+</div></div>
+{% endif %}
+{% endblock %}

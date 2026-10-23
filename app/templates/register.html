@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block title %}注册{% endblock %}
+{% macro field(name, label, type="text", value="", hint="") %}
+<div class="mb-3">
+  <label class="form-label" for="{{ name }}">{{ label }}</label>
+  <input class="form-control {% if errors.get(name) %}is-invalid{% endif %}" id="{{ name }}"
+         name="{{ name }}" type="{{ type }}" value="{{ value }}">
+  {% if errors.get(name) %}<div class="invalid-feedback">{{ errors[name] }}</div>
+  {% elif hint %}<div class="form-text">{{ hint }}</div>{% endif %}
+</div>
+{% endmacro %}
+{% block content %}
+<div class="auth-box card">
+  <div class="card-body">
+    <h4 class="mb-3 text-center">用户注册</h4>
+    <form method="post" novalidate>
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      {{ field("username", "用户名", value=form.username, hint="3–20 位，只能用字母、数字、下划线") }}
+      {{ field("password", "密码", type="password", hint="至少 6 位") }}
+      {{ field("confirm", "确认密码", type="password") }}
+      {{ field("phone", "手机号（选填）", value=form.phone, hint="11 位数字") }}
+      <button class="btn btn-primary w-100" type="submit">注册</button>
+    </form>
+    <p class="text-center text-muted mt-3 mb-0">已有账号？<a href="{{ url_for('auth.login') }}">去登录</a></p>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,136 @@
+{% extends "base.html" %}
+{% block title %}数据预测{% endblock %}
+{% block content %}
+<h4 class="page-title">数据预测</h4>
+
+{% if running %}
+<div class="alert alert-info py-2 d-flex align-items-center" id="runningNote">
+  <div class="me-auto">有一个预测任务正在运行（任务 {{ running.id }}），同一时间只能运行一个。</div>
+  <a class="btn btn-sm btn-primary" href="{{ url_for('forecast.result', task_id=running.id) }}">查看进度</a>
+</div>
+{% endif %}
+
+<div class="row g-3 mb-3">
+  <div class="col-lg-5">
+    <div class="card h-100"><div class="card-body">
+      <h6 class="card-title">新建预测</h6>
+      <p class="mb-2">用过去几年的月销量，预测下一年每个月的销量，并算出安全库存和建议进货量。</p>
+      <ul class="stat-note ps-3 mb-3">
+        <li>模型固定用实验选定的 SARIMA 与 Holt-Winters 组合模型</li>
+        <li>历史数据到预测年份的前一年为止，至少 3 年，而且每一年都要是完整年份、已经处理过</li>
+        <li>预测全部 18 条“地区 × 类别”序列大约需要十几秒，只预测一条约 2 秒</li>
+      </ul>
+      <button class="btn btn-primary" type="button" id="newForecastBtn" data-bs-toggle="modal" data-bs-target="#forecastModal"
+              {% if not options %}disabled{% endif %}>新建预测</button>
+      <a class="btn btn-outline-secondary ms-2" href="{{ url_for('forecast.history') }}">历史预测记录</a>
+      {% if not options %}
+      <div class="alert alert-warning py-2 mt-3 mb-0" id="noOptions">现在还不能预测：需要连续 3 年完整的数据（每年 12 个月都有订单）。</div>
+      {% endif %}
+    </div></div>
+  </div>
+  <div class="col-lg-7">
+    <div class="card h-100"><div class="card-body">
+      <h6 class="card-title">可以预测的年份</h6>
+      <table class="table table-sm align-middle mb-2" id="optionTable">
+        <thead><tr><th>预测年份</th><th>可以选的历史数据</th></tr></thead>
+        <tbody>
+          {% for target, starts in options.items() %}
+          <tr><td>{{ target }} 年</td>
+              <td>{% for s in starts %}{{ s }}–{{ target - 1 }} 年{% if not loop.last %}，或 {% endif %}{% endfor %}</td></tr>
+          {% else %}
+          <tr><td colspan="2" class="text-muted">暂时没有</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      <table class="table table-sm align-middle mb-0" id="yearTable">
+        <thead><tr><th>年份</th><th>有订单的月份</th><th>处理状态</th></tr></thead>
+        <tbody>
+          {% for y in years %}
+          <tr><td>{{ y.year }}</td><td>{{ y.months }} 个月{% if not y.complete %}<span class="text-muted">（不完整）</span>{% endif %}</td>
+              <td><span class="badge {% if y.processed %}text-bg-success{% else %}text-bg-warning{% endif %}">{{ y.status }}</span></td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div></div>
+  </div>
+</div>
+
+{# 预测设置对话框 #}
+<div class="modal fade" id="forecastModal" tabindex="-1" aria-hidden="true" data-bs-backdrop="static">
+  <div class="modal-dialog modal-lg"><div class="modal-content">
+    <form id="forecastForm" data-url="{{ url_for('forecast.start') }}" novalidate>
+      <div class="modal-header"><h5 class="modal-title">预测设置</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="关闭"></button></div>
+      <div class="modal-body">
+        <div class="alert alert-danger py-2 d-none" id="forecastError">
+          <span id="forecastErrorText"></span>
+          <a class="btn btn-sm btn-warning ms-2 d-none" id="goProcess" href="{{ url_for('process.index') }}">去数据处理</a>
+          <a class="btn btn-sm btn-primary ms-2 d-none" id="goRunning" href="#">查看正在运行的任务</a>
+        </div>
+        <div class="row g-3">
+          <div class="col-6 col-md-4">
+            <label class="form-label" for="target_year">① 预测年份</label>
+            <select class="form-select" id="target_year" name="target_year"></select>
+          </div>
+          <div class="col-6 col-md-4">
+            <label class="form-label" for="history_start">② 历史起始年</label>
+            <select class="form-select" id="history_start" name="history_start"></select>
+          </div>
+          <div class="col-12 col-md-4">
+            <label class="form-label" for="historyText">历史数据</label>
+            <input class="form-control" id="historyText" readonly tabindex="-1">
+          </div>
+          <div class="col-6 col-md-4">
+            <label class="form-label" for="f_region">地区</label>
+            <select class="form-select" id="f_region" name="region">
+              <option>全部</option>{% for r in regions %}<option>{{ r }}</option>{% endfor %}
+            </select>
+          </div>
+          <div class="col-6 col-md-4">
+            <label class="form-label" for="f_category">类别</label>
+            <select class="form-select" id="f_category" name="category">
+              <option>全部</option>{% for c in categories %}<option>{{ c }}</option>{% endfor %}
+            </select>
+          </div>
+          <div class="col-6 col-md-4">
+            <label class="form-label" for="f_level">预测层级</label>
+            <select class="form-select" id="f_level" name="level"><option>类别</option><option>子类别</option></select>
+          </div>
+          <div class="col-6 col-md-4 d-none" id="subBox">
+            <label class="form-label" for="f_sub">子类别</label>
+            <select class="form-select" id="f_sub" name="sub_category"></select>
+          </div>
+          <div class="col-6 col-md-4">
+            <label class="form-label" for="f_inventory">当前库存（件）</label>
+            <input class="form-control" id="f_inventory" name="inventory" type="number" min="0" step="1" value="0" disabled>
+            <div class="form-text" id="inventoryHint">只预测一条序列时才能填</div>
+          </div>
+          <div class="col-6 col-md-4">
+            <label class="form-label" for="f_lead">补货周期</label>
+            <select class="form-select" id="f_lead" name="lead_time">
+              <option value="1">1 个月（每月进货）</option><option value="2">2 个月</option><option value="3">3 个月</option>
+            </select>
+          </div>
+          <div class="col-6 col-md-4">
+            <label class="form-label" for="f_service">服务水平</label>
+            <select class="form-select" id="f_service" name="service_level">
+              <option value="0.90">90%</option><option value="0.95" selected>95%</option><option value="0.99">99%</option>
+            </select>
+          </div>
+        </div>
+        <div class="stat-note mt-3" id="seriesHint"></div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+        <button type="submit" class="btn btn-primary" id="startBtn">开始预测</button>
+      </div>
+    </form>
+  </div></div>
+</div>
+
+<script id="forecastConfig" type="application/json">{{ {"options": options, "subs": category_subs} | tojson }}</script>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/forecast.js') }}"></script>
+{% endblock %}

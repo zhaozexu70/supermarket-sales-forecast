@@ -1,0 +1,10 @@
+{# 数据导入和展示模块里几个页面之间的切换 #}
+<ul class="nav nav-tabs mb-3" id="dataTabs">
+  {% for name, endpoint, group in [("订单查询", "data.orders", ["data.orders"]),
+                                   ("表格导入", "data.import_page", ["data.import_page", "data.import_preview", "data.import_result"]),
+                                   ("导入记录", "data.batches", ["data.batches"])] %}
+  <li class="nav-item">
+    <a class="nav-link {% if request.endpoint in group %}active{% endif %}" href="{{ url_for(endpoint) }}">{{ name }}</a>
+  </li>
+  {% endfor %}
+</ul>

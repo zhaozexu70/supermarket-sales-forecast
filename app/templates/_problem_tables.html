@@ -1,0 +1,34 @@
+{# 失败的行、跳过的行两张表。预览页和结果页都用。需要变量：failed、skipped、show_failed、show_skipped #}
+{% if failed %}
+<div class="card mb-3"><div class="card-body">
+  <h6 class="card-title text-danger">失败的行（{{ failed|length }} 行，不会导入）</h6>
+  <table class="table table-sm align-middle mb-0" id="failedTable">
+    <thead class="table-light"><tr><th class="row-no">Excel 行号</th><th>原因</th></tr></thead>
+    <tbody>
+      {% for f in failed[:show_failed] %}
+      <tr><td>第 {{ f.row }} 行</td><td>{{ f.reason }}</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% if failed|length > show_failed %}
+  <div class="stat-note mt-2">这里只列出前 {{ show_failed }} 行，全部 {{ failed|length }} 行在“下载失败明细”的文件里。</div>
+  {% endif %}
+</div></div>
+{% endif %}
+
+{% if skipped %}
+<div class="card mb-3"><div class="card-body">
+  <h6 class="card-title text-secondary">跳过的行（{{ skipped|length }} 行，行 ID 重复）</h6>
+  <table class="table table-sm align-middle mb-0" id="skippedTable">
+    <thead class="table-light"><tr><th class="row-no">Excel 行号</th><th>原因</th></tr></thead>
+    <tbody>
+      {% for f in skipped[:show_skipped] %}
+      <tr><td>第 {{ f.row }} 行</td><td>{{ f.reason }}</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% if skipped|length > show_skipped %}
+  <div class="stat-note mt-2">这里只列出前 {{ show_skipped }} 行，全部 {{ skipped|length }} 行在“下载失败明细”的文件里。</div>
+  {% endif %}
+</div></div>
+{% endif %}

@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block title %}登录{% endblock %}
+{% block content %}
+<div class="auth-box card">
+  <div class="card-body">
+    <h4 class="mb-3 text-center">用户登录</h4>
+    {% if error %}<div class="alert alert-danger py-2" id="loginError">{{ error }}</div>{% endif %}
+    <form method="post" novalidate>
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="next" value="{{ next_url }}">
+      <div class="mb-3">
+        <label class="form-label" for="username">用户名</label>
+        <input class="form-control" id="username" name="username" value="{{ username }}" autofocus>
+      </div>
+      <div class="mb-3">
+        <label class="form-label" for="password">密码</label>
+        <input class="form-control" id="password" name="password" type="password">
+      </div>
+      <button class="btn btn-primary w-100" type="submit">登录</button>
+    </form>
+    <p class="text-center text-muted mt-3 mb-0">还没有账号？<a href="{{ url_for('auth.register') }}">去注册</a></p>
+  </div>
+</div>
+{% endblock %}

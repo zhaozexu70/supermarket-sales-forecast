@@ -1,0 +1,271 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>超市销售分析与进货预测</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' rx='3' fill='%231f4e79'/%3E%3Cpath d='M3 12l3-4 3 2 4-6' stroke='%23fff' stroke-width='1.6' fill='none'/%3E%3C/svg%3E">
+<meta name="description" content="用四年超市订单数据做销售分析、月销量预测和进货建议的毕业设计项目展示">
+<style>
+  :root {
+    --bg: #f5f7fa; --surface: #ffffff; --border: #e3e8ef;
+    --ink: #1c2430; --ink-2: #4a5566; --ink-3: #7a8494;
+    --accent: #1f4e79; --s1: #2c5f8a; --s2: #d9822b; --band: rgba(217, 130, 43, 0.18); --grid: #e8ecf1;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #12161c; --surface: #1b2129; --border: #2c343f;
+      --ink: #e6eaf0; --ink-2: #b4bcc8; --ink-3: #8a94a3;
+      --accent: #8cb8e6; --s1: #6fa3d6; --s2: #f0a457; --band: rgba(240, 164, 87, 0.2); --grid: #2a313b;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink);
+         font: 16px/1.65 -apple-system, "PingFang SC", "Microsoft YaHei", "Noto Sans SC", sans-serif; }
+  .wrap { max-width: 980px; margin: 0 auto; padding: 0 16px; }
+  header { background: var(--accent); color: #fff; padding: 36px 0 28px; }
+  @media (prefers-color-scheme: dark) { header { background: #17324d; } }
+  h1 { font-size: 26px; line-height: 1.3; margin: 0 0 10px; }
+  header p { margin: 0 0 16px; opacity: .92; }
+  .links { display: flex; flex-wrap: wrap; gap: 10px; }
+  .btn { display: inline-block; padding: 8px 16px; border-radius: 6px; text-decoration: none;
+         background: #fff; color: #1f4e79; font-weight: 600; font-size: 15px; }
+  .btn.ghost { background: transparent; color: #fff; border: 1px solid rgba(255,255,255,.6); }
+  section { margin: 28px 0; }
+  h2 { font-size: 20px; margin: 0 0 6px; }
+  .lead { color: var(--ink-2); margin: 0 0 14px; font-size: 15px; }
+  .tiles { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
+  .tile { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 12px 14px; }
+  .tile b { display: block; font-size: 24px; color: var(--accent); line-height: 1.3; }
+  .tile span { color: var(--ink-2); font-size: 13px; }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 14px; }
+  .card h3 { font-size: 16px; margin: 0 0 2px; }
+  .card .note { color: var(--ink-3); font-size: 13px; margin: 0 0 6px; }
+  .chart { width: 100%; height: 280px; }
+  .grid2 { display: grid; gap: 14px; }
+  ul.steps { padding-left: 20px; margin: 0; color: var(--ink-2); }
+  ul.steps li { margin: 4px 0; }
+  ul.steps b { color: var(--ink); }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; font-variant-numeric: tabular-nums; }
+  th, td { padding: 6px 6px; border-bottom: 1px solid var(--border); text-align: right; white-space: nowrap; }
+  th:first-child, td:first-child { text-align: left; }
+  th { color: var(--ink-2); font-weight: 600; }
+  tr.pick td { font-weight: 700; }
+  .scroll { overflow-x: auto; }
+  .gif { width: 100%; border-radius: 8px; border: 1px solid var(--border); display: block; }
+  .gallery { display: grid; grid-template-columns: 1fr; gap: 14px; }
+  figure { margin: 0; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+  figure img { width: 100%; display: block; }
+  figcaption { padding: 8px 12px; font-size: 14px; color: var(--ink-2); }
+  .tags { display: flex; flex-wrap: wrap; gap: 6px; }
+  .tags span { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 2px 10px; font-size: 13px; color: var(--ink-2); }
+  footer { color: var(--ink-3); font-size: 13px; padding: 24px 0 40px; border-top: 1px solid var(--border); }
+  footer a, .lead a { color: var(--accent); }
+  @media (min-width: 720px) {
+    h1 { font-size: 32px; }
+    .tiles { grid-template-columns: repeat(4, 1fr); }
+    .grid2 { grid-template-columns: 1fr 1fr; }
+    .gallery { grid-template-columns: 1fr 1fr; }
+    .chart { height: 320px; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <div class="wrap">
+    <h1>连锁超市销售分析与进货预测</h1>
+    <p>用四年的超市订单数据做清洗、销售分析和月销量预测，把预测换算成安全库存和建议进货量，并做成可登录使用的 Web 系统。本科毕业设计。</p>
+    <div class="links">
+      <a class="btn" href="https://github.com/zhaozexu70/supermarket-sales-forecast">查看代码仓库</a>
+      <a class="btn ghost" href="#forecast">看预测示例</a>
+    </div>
+  </div>
+</header>
+
+<main class="wrap">
+  <section>
+    <div class="tiles">
+      <div class="tile"><b>9959</b><span>条订单明细（2021–2024）</span></div>
+      <div class="tile"><b>18</b><span>条“地区 × 类别”月度序列</span></div>
+      <div class="tile"><b>33.8%</b><span>最终模型测试集 WAPE</span></div>
+      <div class="tile"><b>−6.5</b><span>个百分点，相比季节朴素基准</span></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>系统演示</h2>
+    <p class="lead">登录 → 首页概览 → 销售分析 → 预测设置 → 预测结果（演示数据库，约 9 秒）。</p>
+    <img class="gif" src="images/demo.gif" alt="系统操作演示：登录、销售分析、预测设置和预测结果页面" loading="lazy">
+  </section>
+
+  <section>
+    <h2>做了什么</h2>
+    <ul class="steps">
+      <li><b>数据质量：</b>发现 1403 个订单 ID 被多笔订单重复使用，改用“订单 ID + 日期 + 客户 ID”识别订单；离群值只标记、不删除。</li>
+      <li><b>粒度选择：</b>周 × 地区 × 子类别有 67.8% 的月份是零销量，月 × 地区 × 类别只有 4.3%，所以按月、按类别建模，子类别再按占比分配。</li>
+      <li><b>模型对比：</b>季节朴素法、SARIMA、Holt-Winters、二者组合、LightGBM；2023 年验证选方案，2024 年测试只评估一次。</li>
+      <li><b>进货建议：</b>安全库存 = z × σ × √L（95% 服务水平 z = 1.65，σ 取测试期 RMSE），第 1 个月进货 = 预测 + 安全库存 − 库存。</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>销售规律</h2>
+    <p class="lead">数据为阿里云天池公开的模拟零售订单数据，不代表真实企业。</p>
+    <div class="grid2">
+      <div class="card">
+        <h3>月度销售额（万元）</h3>
+        <p class="note">逐年增长，年内波动明显</p>
+        <div id="chartTrend" class="chart" role="img" aria-label="2021 到 2024 年月度销售额折线图"></div>
+      </div>
+      <div class="card">
+        <h3>各月份占全年销量（%）</h3>
+        <p class="note">四年平均；5–6 月、8–12 月是旺季</p>
+        <div id="chartSeason" class="chart" role="img" aria-label="1 到 12 月销量占比柱状图"></div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>模型对比</h2>
+    <p class="lead">18 条序列的整体 WAPE，越低越好。最终采用组合模型：两个阶段都接近最好，测试集 R² 最高（0.754）。</p>
+    <div class="card">
+      <div id="chartModels" class="chart" role="img" aria-label="五种方案验证集和测试集 WAPE 对比"></div>
+      <div class="scroll">
+        <table id="modelTable"><thead><tr><th>方案</th><th>验证集 2023</th><th>测试集 2024</th></tr></thead><tbody></tbody></table>
+      </div>
+    </div>
+  </section>
+
+  <section id="forecast">
+    <h2>预测示例：<span id="fcName"></span></h2>
+    <p class="lead">实线是历史月销量，虚线是 2025 年上半年预测，浅色带是 95% 预测区间。</p>
+    <div class="card">
+      <div id="chartForecast" class="chart" role="img" aria-label="历史销量与 2025 年预测折线图"></div>
+      <div class="scroll">
+        <table id="fcTable"><thead><tr><th>月份</th><th>预测销量</th><th>预测区间</th><th>安全库存</th><th>建议进货</th></tr></thead><tbody></tbody></table>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>系统截图</h2>
+    <div class="gallery">
+      <figure><img src="images/01_home.png" alt="首页数据概览" loading="lazy"><figcaption>首页：数据概览和月度走势</figcaption></figure>
+      <figure><img src="images/03_analysis_trend.png" alt="销售分析页" loading="lazy"><figcaption>销售分析：月度走势、淡旺季、各年同期</figcaption></figure>
+      <figure><img src="images/04_analysis_quadrant.png" alt="品类四象限" loading="lazy"><figcaption>品类四象限：按销量和利润率给出进货建议</figcaption></figure>
+      <figure><img src="images/05_forecast_dialog.png" alt="预测设置对话框" loading="lazy"><figcaption>预测设置：年份、范围、补货周期、服务水平</figcaption></figure>
+      <figure><img src="images/06_forecast_result.png" alt="预测结果页" loading="lazy"><figcaption>预测结果：走势、区间、安全库存、建议进货量</figcaption></figure>
+      <figure><img src="images/02_orders.png" alt="订单查询页" loading="lazy"><figcaption>订单查询：筛选、搜索、分页、导出</figcaption></figure>
+    </div>
+  </section>
+
+  <section>
+    <h2>技术栈</h2>
+    <div class="tags">
+      <span>Python</span><span>pandas</span><span>statsmodels</span><span>SARIMA</span><span>Holt-Winters</span><span>LightGBM</span>
+      <span>Flask</span><span>MySQL</span><span>ECharts</span><span>Bootstrap</span><span>pytest</span><span>Playwright</span>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    Zhao Zexu · 本科毕业设计 · 代码与说明见 <a href="https://github.com/zhaozexu70/supermarket-sales-forecast">GitHub 仓库</a> ·
+    数据来源 <a href="https://tianchi.aliyun.com/dataset/207075">阿里云天池</a>
+  </div>
+</footer>
+
+<script src="vendor/echarts.min.js"></script>
+<script>
+(function () {
+  const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+  const C = { ink2: css("--ink-2"), ink3: css("--ink-3"), grid: css("--grid"), s1: css("--s1"), s2: css("--s2"),
+              band: css("--band"), surface: css("--surface"), border: css("--border"), ink: css("--ink") };
+  const base = {
+    textStyle: { color: C.ink2, fontFamily: "inherit" },
+    grid: { left: 8, right: 12, top: 30, bottom: 8, containLabel: true },
+    tooltip: { backgroundColor: C.surface, borderColor: C.border, textStyle: { color: C.ink } },
+  };
+  const axisX = data => ({ type: "category", data, axisLine: { lineStyle: { color: C.ink3 } },
+                           axisTick: { show: false }, axisLabel: { color: C.ink3, hideOverlap: true } });
+  const axisY = (name) => ({ type: "value", name, nameTextStyle: { color: C.ink3, align: "left" },
+                             splitLine: { lineStyle: { color: C.grid } }, axisLabel: { color: C.ink3 } });
+  const charts = [];
+  const make = (id, option) => { const c = echarts.init(document.getElementById(id)); c.setOption(Object.assign({}, base, option)); charts.push(c); };
+
+  fetch("data/showcase.json").then(r => r.json()).then(d => {
+    make("chartTrend", {
+      tooltip: Object.assign({}, base.tooltip, { trigger: "axis", valueFormatter: v => v + " 万元" }),
+      xAxis: axisX(d.monthly.month), yAxis: axisY(""),
+      series: [{ name: "销售额", type: "line", data: d.monthly.sales_wan, symbol: "none",
+                 lineStyle: { width: 2, color: C.s1 }, itemStyle: { color: C.s1 }, areaStyle: { color: C.s1, opacity: 0.08 } }]
+    });
+
+    const avg = 100 / 12;
+    make("chartSeason", {
+      tooltip: Object.assign({}, base.tooltip, { trigger: "axis", valueFormatter: v => v + "%" }),
+      xAxis: axisX(d.season.month), yAxis: axisY(""),
+      series: [{ name: "占全年销量", type: "bar", barWidth: "58%",
+                 data: d.season.share.map(v => ({ value: v, itemStyle: { color: v > avg ? C.s2 : C.s1, borderRadius: [4, 4, 0, 0] } })),
+                 markLine: { silent: true, symbol: "none", lineStyle: { color: C.ink3, type: "dashed" },
+                             label: { formatter: "平均 8.3%", color: C.ink3, position: "insideEndTop" }, data: [{ yAxis: avg }] } }]
+    });
+
+    const models = d.models.model.slice().reverse();
+    const valid = d.models.valid_wape.slice().reverse(), test = d.models.test_wape.slice().reverse();
+    make("chartModels", {
+      legend: { top: 0, right: 0, textStyle: { color: C.ink2 }, itemWidth: 12, itemHeight: 12 },
+      tooltip: Object.assign({}, base.tooltip, { trigger: "axis", axisPointer: { type: "shadow" }, valueFormatter: v => v + "%" }),
+      grid: { left: 8, right: 36, top: 30, bottom: 8, containLabel: true },
+      xAxis: Object.assign(axisY(""), { min: 0, axisLabel: { color: C.ink3, formatter: "{value}%" } }),
+      yAxis: Object.assign(axisX(models), { axisLabel: { color: C.ink2 } }),
+      series: [
+        { name: "验证集 2023", type: "bar", data: valid, itemStyle: { color: C.s1, borderRadius: [0, 4, 4, 0] }, barGap: "15%" },
+        { name: "测试集 2024", type: "bar", data: test, itemStyle: { color: C.s2, borderRadius: [0, 4, 4, 0] },
+          label: { show: true, position: "right", color: C.ink2, formatter: "{c}%" } }
+      ]
+    });
+    const tb = document.querySelector("#modelTable tbody");
+    d.models.model.forEach((m, i) => {
+      const tr = document.createElement("tr");
+      if (m === "组合模型") tr.className = "pick";
+      tr.innerHTML = `<td>${m}${m === "组合模型" ? "（最终）" : ""}</td><td>${d.models.valid_wape[i]}%</td><td>${d.models.test_wape[i]}%</td>`;
+      tb.appendChild(tr);
+    });
+
+    const f = d.forecast;
+    document.getElementById("fcName").textContent = f.series;
+    const months = f.hist_month.concat(f.month), nH = f.hist_month.length, pad = Array(nH).fill(null);
+    const last = f.hist_qty[nH - 1];
+    const predLine = Array(nH - 1).fill(null).concat([last], f.pred);
+    make("chartForecast", {
+      legend: { top: 0, right: 0, textStyle: { color: C.ink2 }, data: ["历史销量", "预测销量", "95% 区间"] },
+      tooltip: Object.assign({}, base.tooltip, { trigger: "axis", formatter: ps => {
+        const i = ps[0].dataIndex, lines = [months[i]];
+        if (i < nH) lines.push("历史销量：" + f.hist_qty[i] + " 件");
+        else { const k = i - nH; lines.push("预测销量：" + f.pred[k] + " 件", "区间：" + f.lower[k] + " – " + f.upper[k]); }
+        return lines.join("<br>");
+      } }),
+      xAxis: axisX(months), yAxis: axisY("件"),
+      series: [
+        { name: "区间下限", type: "line", stack: "band", data: pad.concat(f.lower), symbol: "none", lineStyle: { opacity: 0 } },
+        { name: "95% 区间", type: "line", stack: "band", data: pad.concat(f.upper.map((u, k) => +(u - f.lower[k]).toFixed(1))),
+          symbol: "none", lineStyle: { opacity: 0 }, areaStyle: { color: C.band }, itemStyle: { color: C.band } },
+        { name: "历史销量", type: "line", data: f.hist_qty, symbol: "none", lineStyle: { width: 2, color: C.s1 }, itemStyle: { color: C.s1 } },
+        { name: "预测销量", type: "line", data: predLine, symbol: "circle", symbolSize: 8,
+          lineStyle: { width: 2, type: "dashed", color: C.s2 }, itemStyle: { color: C.s2, borderColor: C.surface, borderWidth: 2 } }
+      ]
+    });
+    const fb = document.querySelector("#fcTable tbody");
+    f.month.forEach((m, k) => {
+      const tr = document.createElement("tr");
+      const n = v => v.toFixed(1);
+      tr.innerHTML = `<td>${m}</td><td>${n(f.pred[k])}</td><td>${n(f.lower[k])} – ${n(f.upper[k])}</td><td>${n(f.safety[k])}</td><td>${f.order[k]}</td>`;
+      fb.appendChild(tr);
+    });
+  });
+  window.addEventListener("resize", () => charts.forEach(c => c.resize()));
+})();
+</script>
+</body>
+</html>

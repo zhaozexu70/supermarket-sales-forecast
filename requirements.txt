@@ -1,0 +1,14 @@
+pandas>=1.5
+numpy>=1.23
+openpyxl>=3.0
+matplotlib>=3.6
+statsmodels>=0.14
+pymysql>=1.0
+flask>=3.1
+sqlalchemy>=2.0
+pytest>=8.0
+flask-wtf>=1.2
+playwright>=1.40
+threadpoolctl>=3.0
+lightgbm>=4.0
+markdown>=3.5

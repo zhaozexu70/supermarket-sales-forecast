@@ -1,0 +1,91 @@
+{% extends "base.html" %}
+{% block title %}销售分析{% endblock %}
+
+{# 一张图表的卡片：标题、一句怎么看的说明、图表框 #}
+{% macro chart_card(name, title, note, tall=false) %}
+<div class="card h-100"><div class="card-body">
+  <h6 class="card-title mb-1">{{ title }}</h6>
+  <div class="stat-note mb-1">{{ note }}</div>
+  <div class="chart-box {% if tall %}chart-tall{% endif %}" id="chart_{{ name }}"></div>
+</div></div>
+{% endmacro %}
+
+{% block content %}
+<h4 class="page-title">销售数据分析展示</h4>
+
+{% if stale %}
+<div class="alert alert-warning py-2 d-flex align-items-center" id="staleBanner">
+  <div class="me-auto">部分年份数据已更新但尚未处理（{{ stale|join("、") }} 年），图表可能不是最新的。</div>
+  <a class="btn btn-sm btn-warning" href="{{ url_for('process.index') }}">去数据处理</a>
+</div>
+{% endif %}
+
+<div class="card mb-3"><div class="card-body py-2">
+  <form method="get" action="{{ url_for('analysis.index') }}" class="row g-2 align-items-end" id="filterForm">
+    <div class="col-6 col-md-2">
+      <label class="form-label" for="start">起始年</label>
+      <select class="form-select form-select-sm" id="start" name="start">
+        {% for y in f.years %}<option {% if y == f.start %}selected{% endif %}>{{ y }}</option>{% endfor %}
+      </select>
+    </div>
+    <div class="col-6 col-md-2">
+      <label class="form-label" for="end">结束年</label>
+      <select class="form-select form-select-sm" id="end" name="end">
+        {% for y in f.years %}<option {% if y == f.end %}selected{% endif %}>{{ y }}</option>{% endfor %}
+      </select>
+    </div>
+    <div class="col-6 col-md-2">
+      <label class="form-label" for="region">地区</label>
+      <select class="form-select form-select-sm" id="region" name="region">
+        <option value="">全部</option>
+        {% for r in regions %}<option {% if f.region == r %}selected{% endif %}>{{ r }}</option>{% endfor %}
+      </select>
+    </div>
+    <div class="col-6 col-md-2">
+      <label class="form-label" for="category">类别</label>
+      <select class="form-select form-select-sm" id="category" name="category">
+        <option value="">全部</option>
+        {% for c in categories %}<option {% if f.category == c %}selected{% endif %}>{{ c }}</option>{% endfor %}
+      </select>
+    </div>
+    <div class="col-6 col-md-1"><button class="btn btn-primary btn-sm w-100" type="submit" id="applyBtn">查看</button></div>
+  </form>
+  <div class="d-flex align-items-center gap-2 mt-2 pt-2 border-top" id="linkBar">
+    <span id="linkStatus" class="small text-muted">点“地区对比”里的柱子，其他图只看这个地区</span>
+    <button class="btn btn-outline-secondary btn-sm text-nowrap ms-auto" type="button" id="clearLink" disabled>清除联动</button>
+  </div>
+</div></div>
+
+<div class="alert alert-danger py-2 d-none" id="loadError"></div>
+
+<div class="row g-3">
+  <div class="col-12">{{ chart_card("trend", "① 月度走势", "柱子是销售额（左边的刻度），折线是销量（右边的刻度）。拖动下面的滑块可以只看一段时间。") }}</div>
+  <div class="col-lg-6">{{ chart_card("season", "② 淡旺季", "1–12 月的销量各占总销量的百分之几。橙色是高于平均水平（8.3%）的月份。") }}</div>
+  <div class="col-lg-6">{{ chart_card("yoy", "③ 各年同期对比", "每年一条线，看同一个月份不同年份的销量。") }}</div>
+  <div class="col-lg-6">{{ chart_card("annual", "④ 年度增长", "每年的销售额，柱子上方是比上一年增长的百分比。") }}</div>
+  <div class="col-lg-6">{{ chart_card("region", "⑤ 地区对比", "各地区的销售额和利润。点一个地区的柱子，其他图表只看这个地区；再点一次取消。") }}</div>
+  <div class="col-lg-6">{{ chart_card("subcategory", "⑥ 品类贡献", "各子类别的销售额和利润，亏损的利润用红色。点一个子类别，其他图表只看它所属的类别。", tall=true) }}</div>
+  <div class="col-lg-6">{{ chart_card("heatmap", "⑦ 地区 × 子类别销量", "每一格是一个地区一个子类别的销量（件），颜色越深卖得越多。", tall=true) }}</div>
+  <div class="col-12">{{ chart_card("quadrant", "⑧ 品类四象限", "每个点是一个子类别：越靠右销量越高，越靠上利润率越高。两条虚线是各自的中位数。蓝色是办公用品，橙色是技术，绿色是家具。", tall=true) }}</div>
+  <div class="col-12">
+    <div class="card h-100"><div class="card-body">
+      <h6 class="card-title">四象限进货建议</h6>
+      <table class="table table-sm align-middle mb-2" id="quadrantTable">
+        <thead><tr><th>象限</th><th>建议</th><th>子类别</th></tr></thead>
+        <tbody></tbody>
+      </table>
+      <div class="stat-note" id="quadrantNote"></div>
+      <div class="stat-note mt-1">利润率 = 利润 ÷ 销售额。分界线用中位数：一半的子类别在线的一边，另一半在另一边。</div>
+    </div></div>
+  </div>
+</div>
+
+{# 页面脚本要用到的东西：当前的筛选条件、数据接口的网址 #}
+<script id="analysisConfig" type="application/json">{{ {"filters": {"start": f.start, "end": f.end, "region": f.region, "category": f.category},
+    "api": url_for("analysis.chart_data", name="NAME"), "charts": charts} | tojson }}</script>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='vendor/echarts/echarts.min.js') }}"></script>
+<script src="{{ url_for('static', filename='js/analysis.js') }}"></script>
+{% endblock %}

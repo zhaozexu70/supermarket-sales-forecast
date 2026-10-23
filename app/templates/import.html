@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+{% set active_nav = "data.orders" %}
+{% block title %}表格导入{% endblock %}
+{% block content %}
+<h4 class="page-title">数据导入和展示 <small class="text-muted">表格导入</small></h4>
+{% include "_data_tabs.html" %}
+
+<div class="row g-3">
+  <div class="col-lg-7">
+    <div class="card h-100"><div class="card-body">
+      <h6 class="card-title">上传订单文件</h6>
+      <form method="post" action="{{ url_for('data.import_page') }}" enctype="multipart/form-data" id="uploadForm">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="file" name="file" id="fileInput" accept=".xlsx,.csv" hidden>
+        {# 拖放区：可以把文件拖进来，也可以点一下选择文件 #}
+        <div class="drop-zone" id="dropZone" tabindex="0">
+          <div class="drop-title">把 Excel 或 CSV 文件拖到这里</div>
+          <div class="text-muted">或者点击这里选择文件（.xlsx、.csv，不超过 10 MB）</div>
+          <div class="drop-file" id="fileName"></div>
+        </div>
+        <div class="mt-3 d-flex align-items-center gap-3">
+          <button class="btn btn-primary" type="submit" id="uploadBtn" disabled>上传并预览</button>
+          <span class="text-muted small">上传后先显示校验结果，点“确认导入”才会写入数据库</span>
+        </div>
+      </form>
+    </div></div>
+  </div>
+  <div class="col-lg-5">
+    <div class="card h-100"><div class="card-body">
+      <h6 class="card-title">导入步骤</h6>
+      <ol class="mb-3 ps-3 import-steps">
+        <li>下载导入模板，按模板的 20 列填写（“填写说明”工作表里有每一列的要求）</li>
+        <li>上传填好的文件，系统逐行检查</li>
+        <li>在预览页核对：将导入几行、哪几行有问题、为什么</li>
+        <li>点“确认导入”，合格的行写入数据库，有问题的行不导入</li>
+      </ol>
+      <a class="btn btn-outline-primary btn-sm" id="templateBtn" href="{{ url_for('data.import_template') }}">下载导入模板</a>
+      <div class="stat-note mt-3">行 ID 建议留空，由系统自动生成。订单查询页导出的 Excel 和模板的列相同，可以直接上传。</div>
+    </div></div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  // 拖放上传：把拖进来的文件交给隐藏的文件选择框，再由表单正常提交
+  const dropZone = document.getElementById("dropZone");
+  const fileInput = document.getElementById("fileInput");
+
+  function showFile() {
+    const file = fileInput.files[0];
+    document.getElementById("fileName").textContent = file ? "已选择：" + file.name : "";
+    document.getElementById("uploadBtn").disabled = !file;
+  }
+  dropZone.addEventListener("click", () => fileInput.click());
+  dropZone.addEventListener("keydown", e => { if (e.key === "Enter") fileInput.click(); });
+  fileInput.addEventListener("change", showFile);
+  for (const name of ["dragenter", "dragover"]) {
+    dropZone.addEventListener(name, e => { e.preventDefault(); dropZone.classList.add("drag-over"); });
+  }
+  for (const name of ["dragleave", "drop"]) {
+    dropZone.addEventListener(name, e => { e.preventDefault(); dropZone.classList.remove("drag-over"); });
+  }
+  dropZone.addEventListener("drop", e => {
+    if (e.dataTransfer.files.length) {
+      fileInput.files = e.dataTransfer.files;
+      showFile();
+    }
+  });
+</script>
+{% endblock %}

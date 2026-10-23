@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+{% block title %}预测结果{% endblock %}
+{% block content %}
+<h4 class="page-title">预测结果 <small class="text-muted">历史预测记录</small></h4>
+
+<div class="d-flex justify-content-between align-items-center mb-2">
+  <div>共 <b id="taskCount">{{ tasks|length }}</b> 条记录（最多显示最近 100 条）</div>
+  <a class="btn btn-primary btn-sm" href="{{ url_for('forecast.index') }}">新建预测</a>
+</div>
+
+<div class="card"><div class="table-responsive">
+  <table class="table table-sm table-hover align-middle mb-0" id="taskTable">
+    <thead class="table-light">
+      <tr><th>任务</th><th>预测年份</th><th>历史数据</th><th>地区</th><th>类别</th><th>层级</th><th>子类别</th>
+          <th class="text-end">库存</th><th class="text-end">补货周期</th><th class="text-end">服务水平</th>
+          <th>状态</th><th>时间</th><th class="text-end">用时</th><th>操作人</th><th></th></tr>
+    </thead>
+    <tbody>
+      {% for t in tasks %}
+      <tr data-task="{{ t.id }}">
+        <td>{{ t.id }}</td><td>{{ t.target_year }}</td><td>{{ t.history_start }}–{{ t.history_end }}</td>
+        <td>{{ t.region }}</td><td>{{ t.category }}</td><td>{{ t.level_name }}</td><td>{{ t.sub_category or "—" }}</td>
+        <td class="text-end">{{ t.inventory }}</td><td class="text-end">{{ t.lead_time }} 个月</td>
+        <td class="text-end">{{ t.service_percent }}%</td>
+        <td>{% if t.status == "已完成" %}<span class="badge text-bg-success">已完成</span>
+            {% elif t.status == "运行中" %}<span class="badge text-bg-info">运行中 {{ t.progress_done }} / {{ t.progress_total }}</span>
+            {% else %}<span class="badge text-bg-danger" title="{{ t.error_msg }}">失败</span>{% endif %}</td>
+        <td>{{ t.created_at.strftime("%Y-%m-%d %H:%M:%S") }}</td>
+        <td class="text-end">{% if t.seconds is not none %}{{ t.seconds }} 秒{% else %}—{% endif %}</td>
+        <td>{{ t.username or "—" }}</td>
+        <td class="text-end text-nowrap">
+          <a class="btn btn-link btn-sm p-0 me-2 view-link" href="{{ url_for('forecast.result', task_id=t.id) }}">查看</a>
+          {% if t.status != "运行中" %}
+          <button class="btn btn-outline-danger btn-sm py-0 delete-btn" type="button"
+                  data-url="{{ url_for('forecast.delete', task_id=t.id) }}"
+                  data-text="将删除任务 {{ t.id }}（预测 {{ t.target_year }} 年，{{ t.region }}、{{ t.category }}，{{ t.level_name }}层级）和它的全部预测结果。">删除</button>
+          {% endif %}
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="15" class="text-center text-muted py-4">还没有预测记录，点右上角的“新建预测”开始</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div></div>
+
+{# 删除前的确认对话框 #}
+<div class="modal fade" id="deleteModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog"><div class="modal-content">
+    <form method="post" id="deleteForm">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div class="modal-header"><h5 class="modal-title">删除预测记录</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="关闭"></button></div>
+      <div class="modal-body"><p id="deleteText" class="mb-2"></p><p class="mb-0 text-danger">删除后不能恢复，确定要继续吗？</p></div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+        <button type="submit" class="btn btn-danger" id="deleteOk">确定删除</button>
+      </div>
+    </form>
+  </div></div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  // 点“删除”先弹出确认对话框，点了“确定删除”才提交
+  const deleteModal = new bootstrap.Modal(document.getElementById("deleteModal"));
+  for (const btn of document.querySelectorAll(".delete-btn")) {
+    btn.addEventListener("click", () => {
+      document.getElementById("deleteForm").action = btn.dataset.url;
+      document.getElementById("deleteText").textContent = btn.dataset.text;
+      deleteModal.show();
+    });
+  }
+</script>
+{% endblock %}

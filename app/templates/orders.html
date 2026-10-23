@@ -1,0 +1,256 @@
+{% extends "base.html" %}
+{% block title %}数据导入和展示{% endblock %}
+
+{# 新增订单对话框里的一个下拉框 #}
+{% macro pick(name, label, options) %}
+<div class="col-6 col-md-3">
+  <label class="form-label" for="new_{{ name }}">{{ label }}</label>
+  <select class="form-select form-select-sm" id="new_{{ name }}" name="{{ name }}">
+    <option value="">请选择</option>
+    {% for v in options %}<option>{{ v }}</option>{% endfor %}
+  </select>
+</div>
+{% endmacro %}
+
+{# 新增订单对话框里的一个输入框 #}
+{% macro field(name, label, type="text", width=3, hint="", maxlength=None) %}
+<div class="col-6 col-md-{{ width }}">
+  <label class="form-label" for="new_{{ name }}">{{ label }}</label>
+  <input class="form-control form-control-sm" id="new_{{ name }}" name="{{ name }}" type="{{ type }}"
+         {% if type == "number" %}step="any"{% endif %} {% if maxlength %}maxlength="{{ maxlength }}"{% endif %} placeholder="{{ hint }}">
+</div>
+{% endmacro %}
+
+{# 可以点击排序的表头：再点一次同一列，方向反过来 #}
+{% macro sort_th(key, label) %}
+<th class="text-end">
+  <a class="sort-link" href="{{ link(sort=key, dir=('asc' if f.sort == key and f.dir == 'desc' else 'desc'), page=1) }}">
+    {{ label }}{% if f.sort == key %}{{ " ↑" if f.dir == "asc" else " ↓" }}{% endif %}</a>
+</th>
+{% endmacro %}
+
+{% block content %}
+<h4 class="page-title">数据导入和展示 <small class="text-muted">订单查询</small></h4>
+{% include "_data_tabs.html" %}
+
+<div class="card mb-3"><div class="card-body">
+  <form method="get" action="{{ url_for('data.orders') }}" class="row g-2 align-items-end" id="filterForm">
+    <div class="col-6 col-md-2">
+      <label class="form-label" for="date_from">订单日期从</label>
+      <input class="form-control form-control-sm" type="date" id="date_from" name="date_from" value="{{ f.date_from }}">
+    </div>
+    <div class="col-6 col-md-2">
+      <label class="form-label" for="date_to">到</label>
+      <input class="form-control form-control-sm" type="date" id="date_to" name="date_to" value="{{ f.date_to }}">
+    </div>
+    <div class="col-6 col-md-1">
+      <label class="form-label" for="region">地区</label>
+      <select class="form-select form-select-sm" id="region" name="region">
+        <option value="">全部</option>
+        {% for v in regions %}<option {% if f.region == v %}selected{% endif %}>{{ v }}</option>{% endfor %}
+      </select>
+    </div>
+    <div class="col-6 col-md-2">
+      <label class="form-label" for="category">类别</label>
+      <select class="form-select form-select-sm" id="category" name="category">
+        <option value="">全部</option>
+        {% for v in categories %}<option {% if f.category == v %}selected{% endif %}>{{ v }}</option>{% endfor %}
+      </select>
+    </div>
+    <div class="col-6 col-md-1">
+      <label class="form-label" for="sub_category">子类别</label>
+      <select class="form-select form-select-sm" id="sub_category" name="sub_category" data-selected="{{ f.sub_category }}">
+        <option value="">全部</option>
+      </select>
+    </div>
+    <div class="col-6 col-md-1">
+      <label class="form-label" for="source">来源</label>
+      <select class="form-select form-select-sm" id="source" name="source">
+        <option value="">全部</option>
+        {% for v in sources %}<option {% if f.source == v %}selected{% endif %}>{{ v }}</option>{% endfor %}
+      </select>
+    </div>
+    <div class="col-12 col-md-2">
+      <label class="form-label" for="q">商品名称包含</label>
+      <input class="form-control form-control-sm" id="q" name="q" value="{{ f.q }}" maxlength="50">
+    </div>
+    <div class="col-12 col-md-1 d-flex gap-1">
+      <input type="hidden" name="sort" value="{{ f.sort }}">
+      <input type="hidden" name="dir" value="{{ f.dir }}">
+      <button class="btn btn-primary btn-sm flex-fill" type="submit">查询</button>
+    </div>
+  </form>
+</div></div>
+
+<div class="d-flex justify-content-between align-items-center mb-2">
+  <div>共 <b id="totalCount">{{ total }}</b> 条，第 {{ page }} / {{ pages }} 页，每页 20 条
+    <a class="ms-2 small" href="{{ url_for('data.orders') }}">清除条件</a></div>
+  <div class="d-flex gap-2">
+    <button class="btn btn-primary btn-sm" type="button" id="newOrderBtn" data-bs-toggle="modal" data-bs-target="#orderModal">新增订单</button>
+    <a class="btn btn-outline-success btn-sm" id="exportBtn" href="{{ export_url }}">导出 Excel（当前条件的全部 {{ total }} 条）</a>
+  </div>
+</div>
+
+<div class="card"><div class="table-responsive">
+  <table class="table table-sm table-hover align-middle mb-0 order-table" id="orderTable">
+    <thead class="table-light">
+      <tr>
+        <th><a class="sort-link" href="{{ link(sort='order_date', dir=('asc' if f.sort == 'order_date' and f.dir == 'desc' else 'desc'), page=1) }}">订单日期{% if f.sort == "order_date" %}{{ " ↑" if f.dir == "asc" else " ↓" }}{% endif %}</a></th>
+        <th>订单 ID</th><th>客户</th><th>地区</th><th>省份</th><th>城市</th><th>类别</th><th>子类别</th><th>商品名</th>
+        {{ sort_th("sales", "销售额") }}
+        <th class="text-end">数量</th><th class="text-end">折扣</th>
+        {{ sort_th("profit", "利润") }}
+        <th>来源</th><th class="text-end">行 ID</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for r in rows %}
+      <tr>
+        <td>{{ r.order_date }}</td><td>{{ r.order_id }}</td><td>{{ r.customer_name }}</td><td>{{ r.region }}</td>
+        <td>{{ r.province }}</td><td>{{ r.city }}</td><td>{{ r.category }}</td><td>{{ r.sub_category }}</td>
+        <td class="product-name" title="{{ r.product_name }}">{{ r.product_name }}</td>
+        <td class="text-end">{{ "%.2f"|format(r.sales) }}</td><td class="text-end">{{ r.quantity }}</td>
+        <td class="text-end">{{ "%.0f"|format(r.discount * 100) }}%</td>
+        <td class="text-end {% if r.profit < 0 %}text-danger{% endif %}">{{ "%.2f"|format(r.profit) }}</td>
+        <td>{{ r.source }}</td><td class="text-end text-muted">{{ r.row_id }}</td>
+      </tr>
+      {% else %}
+      <tr><td colspan="15" class="text-center text-muted py-4">没有符合条件的订单</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div></div>
+
+{% if pages > 1 %}
+<nav class="mt-3"><ul class="pagination pagination-sm justify-content-center mb-0" id="pager">
+  <li class="page-item {% if page == 1 %}disabled{% endif %}"><a class="page-link" href="{{ link(page=1) }}">首页</a></li>
+  <li class="page-item {% if page == 1 %}disabled{% endif %}"><a class="page-link" href="{{ link(page=page - 1) }}">上一页</a></li>
+  {% for p in range([1, page - 2]|max, [pages, page + 2]|min + 1) %}
+  <li class="page-item {% if p == page %}active{% endif %}"><a class="page-link" href="{{ link(page=p) }}">{{ p }}</a></li>
+  {% endfor %}
+  <li class="page-item {% if page == pages %}disabled{% endif %}"><a class="page-link" href="{{ link(page=page + 1) }}">下一页</a></li>
+  <li class="page-item {% if page == pages %}disabled{% endif %}"><a class="page-link" href="{{ link(page=pages) }}">末页</a></li>
+</ul></nav>
+{% endif %}
+
+{# 新增订单对话框：逐条录入。提交后校验不通过，就在对话框里提示，不关闭 #}
+<div class="modal fade" id="orderModal" tabindex="-1" aria-hidden="true" data-bs-backdrop="static">
+  <div class="modal-dialog modal-xl"><div class="modal-content">
+    <form id="orderForm" data-url="{{ url_for('data.order_new') }}" novalidate>
+      <div class="modal-header"><h5 class="modal-title">新增订单</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="关闭"></button></div>
+      <div class="modal-body">
+        <div class="alert alert-danger py-2 d-none" id="orderErrors"></div>
+        <div class="row g-2">
+          {{ field("order_date", "订单日期", "date") }}
+          {{ field("ship_date", "发货日期", "date") }}
+          {{ pick("ship_mode", "邮寄方式", ship_modes) }}
+          {{ field("order_id", "订单 ID", hint="留空自动生成", maxlength=30) }}
+          {{ field("customer_id", "客户 ID", maxlength=30) }}
+          {{ field("customer_name", "客户名称", maxlength=30) }}
+          {{ pick("segment", "细分", segments) }}
+          {{ pick("region", "地区", regions) }}
+          {{ pick("province", "省/自治区", provinces) }}
+          {{ field("city", "城市", maxlength=30) }}
+          {{ pick("category", "类别", categories) }}
+          <div class="col-6 col-md-3">
+            <label class="form-label" for="new_sub_category">子类别</label>
+            <select class="form-select form-select-sm" id="new_sub_category" name="sub_category">
+              <option value="">请先选类别</option>
+            </select>
+          </div>
+          {{ field("product_id", "产品 ID", hint="留空自动生成", maxlength=40) }}
+          {{ field("product_name", "产品名称", width=9, maxlength=200) }}
+          {{ field("sales", "销售额", "number", hint="大于 0") }}
+          {{ field("quantity", "数量", "number", hint="正整数") }}
+          {{ field("discount", "折扣", "number", hint="0 到 1 之间，不打折填 0") }}
+          {{ field("profit", "利润", "number", hint="可以是负数") }}
+        </div>
+        <div class="stat-note mt-2">行 ID 由系统自动生成；国家固定为“中国”。保存后这条订单单独是一个导入批次。
+          小数点请在英文输入状态下输入（比如 0.1）；中文输入法下的句号“。”数字框不收，0。1 会变成 01。</div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+        <button type="submit" class="btn btn-primary" id="orderSave">保存</button>
+      </div>
+    </form>
+  </div></div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  // 子类别随类别联动：选了类别，子类别只列出这个类别下的；没选类别就列出全部
+  const categorySubs = {{ category_subs | tojson }};
+  const categorySelect = document.getElementById("category");
+  const subSelect = document.getElementById("sub_category");
+
+  function fillSubs(keep) {
+    const subs = categorySelect.value ? categorySubs[categorySelect.value] : Object.values(categorySubs).flat();
+    subSelect.innerHTML = '<option value="">全部</option>';
+    for (const s of subs) {
+      const opt = new Option(s, s, false, s === keep);
+      subSelect.add(opt);
+    }
+  }
+  fillSubs(subSelect.dataset.selected);
+  categorySelect.addEventListener("change", () => fillSubs(""));
+
+  // ---------- 新增订单对话框 ----------
+  const orderForm = document.getElementById("orderForm");
+  const orderErrors = document.getElementById("orderErrors");
+  const newCategory = document.getElementById("new_category");
+  const newSub = document.getElementById("new_sub_category");
+
+  // 子类别随类别联动
+  newCategory.addEventListener("change", () => {
+    newSub.innerHTML = '<option value="">' + (newCategory.value ? "请选择" : "请先选类别") + "</option>";
+    for (const s of categorySubs[newCategory.value] || []) newSub.add(new Option(s, s));
+  });
+
+  function clearErrors() {
+    orderErrors.classList.add("d-none");
+    orderErrors.innerHTML = "";
+    for (const el of orderForm.querySelectorAll(".is-invalid")) el.classList.remove("is-invalid");
+  }
+
+  // 用 fetch 提交：通过了刷新页面；没通过就把原因显示在对话框里，出错的输入框标红，对话框不关
+  orderForm.addEventListener("submit", async e => {
+    e.preventDefault();
+    const saveBtn = document.getElementById("orderSave");
+    if (saveBtn.disabled) return;          // 上一次提交还没处理完，不重复提交
+    clearErrors();
+    saveBtn.disabled = true;
+    saveBtn.textContent = "正在保存…";
+    let result;
+    try {
+      result = await postJSON(orderForm.dataset.url, Object.fromEntries(new FormData(orderForm)));
+    } catch (err) {
+      result = { ok: false, errors: [{ field: "", msg: "连不上服务器，请确认网站还在运行" }] };
+    }
+    if (result.ok) {
+      location.reload();                   // 按钮保持不可点，直到新页面出来，避免同一条订单存两次
+      return;
+    }
+    saveBtn.disabled = false;
+    saveBtn.textContent = "保存";
+    const title = document.createElement("div");
+    title.className = "fw-bold";
+    title.textContent = "没有保存。请改正下面 " + result.errors.length + " 处后再点“保存”：";
+    orderErrors.appendChild(title);
+    const list = document.createElement("ul");
+    list.className = "mb-0 ps-3";
+    for (const err of result.errors) {
+      const item = document.createElement("li");
+      item.textContent = err.msg;
+      list.appendChild(item);
+      const input = orderForm.elements[err.field];
+      if (input) input.classList.add("is-invalid");
+    }
+    orderErrors.appendChild(list);
+    orderErrors.classList.remove("d-none");
+    orderErrors.scrollIntoView({ block: "nearest" });
+  });
+  document.getElementById("orderModal").addEventListener("hidden.bs.modal", clearErrors);
+</script>
+{% endblock %}

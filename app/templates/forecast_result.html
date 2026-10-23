@@ -1,0 +1,112 @@
+{% extends "base.html" %}
+{% set active_nav = "forecast.history" %}
+{% block title %}预测结果{% endblock %}
+{% block content %}
+<h4 class="page-title">预测结果 <small class="text-muted">任务 {{ task.id }}</small></h4>
+
+{# 顶部：本次预测的设置 #}
+<div class="card mb-3"><div class="card-body py-2">
+  <div class="d-flex flex-wrap align-items-center gap-3" id="settings">
+    {% for name, value in settings %}
+    <span><span class="text-muted">{{ name }}</span> <b>{{ value }}</b></span>
+    {% endfor %}
+    <span class="ms-auto text-muted small">{{ task.created_at.strftime("%Y-%m-%d %H:%M:%S") }}，{{ task.username or "—" }}</span>
+  </div>
+</div></div>
+
+{% if task.status == "运行中" %}
+{# 正在计算：每 2 秒问一次进度 #}
+<div class="card" id="progressCard" data-url="{{ url_for('forecast.status', task_id=task.id) }}"><div class="card-body text-center py-5">
+  <h5 class="mb-3">正在预测，请稍候…</h5>
+  <div class="progress mx-auto mb-2 forecast-progress" role="progressbar" aria-label="预测进度">
+    <div class="progress-bar progress-bar-striped progress-bar-animated" id="progressBar"
+         style="width: {{ (task.progress_done / task.progress_total * 100) | round | int if task.progress_total else 0 }}%"></div>
+  </div>
+  <div id="progressText">已完成 {{ task.progress_done }} / {{ task.progress_total }}</div>
+  <div class="stat-note mt-2">一条“地区 × 类别”序列算完，进度加 1。算完后这个页面会自动显示结果，可以先去看别的页面。</div>
+</div></div>
+
+{% elif task.status == "失败" %}
+<div class="alert alert-danger" id="failedNote">
+  <h6 class="alert-heading">这次预测没有成功</h6>
+  <div>原因：<span id="failedReason">{{ task.error_msg or "没有记录到原因" }}</span></div>
+</div>
+<form method="post" action="{{ url_for('forecast.rerun', task_id=task.id) }}" class="d-inline">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <button class="btn btn-primary" type="submit" id="rerunBtn">用同样的设置再试一次</button>
+</form>
+<a class="btn btn-outline-secondary ms-2" href="{{ url_for('forecast.index') }}">回到数据预测</a>
+
+{% else %}
+{% if reused %}
+<div class="alert alert-info py-2 d-flex align-items-center" id="reusedNote">
+  <div class="me-auto">数据未变化，显示 {{ task.created_at.month }} 月 {{ task.created_at.day }} 日的结果（设置相同，没有重新计算）。</div>
+</div>
+{% endif %}
+{% if changed %}
+<div class="alert alert-warning py-2" id="changedNote">这次预测之后，相关年份的订单又有过变动。下面是当时的预测结果；想按现在的数据预测，请重新处理后点“重新计算”。</div>
+{% endif %}
+{% if note %}
+<div class="alert alert-secondary py-2" id="actualNote">{{ note }}</div>
+{% endif %}
+
+<div class="card mb-3"><div class="card-body">
+  <div class="row g-2 align-items-end mb-2" id="seriesPicker">
+    <div class="col-6 col-md-2">
+      <label class="form-label" for="s_region">地区</label>
+      <select class="form-select form-select-sm" id="s_region">
+        {% for r in options.regions %}<option {% if r == current.0 %}selected{% endif %}>{{ r }}</option>{% endfor %}
+      </select>
+    </div>
+    <div class="col-6 col-md-2">
+      <label class="form-label" for="s_category">类别</label>
+      <select class="form-select form-select-sm" id="s_category">
+        {% for c in options.categories %}<option {% if c == current.1 %}selected{% endif %}>{{ c }}</option>{% endfor %}
+      </select>
+    </div>
+    {% if options.subs %}
+    <div class="col-6 col-md-2">
+      <label class="form-label" for="s_sub">子类别</label>
+      <select class="form-select form-select-sm" id="s_sub" data-selected="{{ current.2 }}"></select>
+    </div>
+    {% endif %}
+    <div class="col text-end">
+      <form method="post" action="{{ url_for('forecast.rerun', task_id=task.id) }}" class="d-inline">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button class="btn btn-outline-primary btn-sm" type="submit" id="rerunBtn">重新计算</button>
+      </form>
+      <a class="btn btn-outline-success btn-sm ms-1" id="exportBtn" href="{{ url_for('forecast.export', task_id=task.id) }}">导出 Excel（全部序列）</a>
+    </div>
+  </div>
+  <div id="forecastChart" class="chart-tall"></div>
+  <div class="stat-note">实线是历史销量，虚线是预测销量，浅色带是 95% 预测区间，点线是“预测销量 + 安全库存”。{% if task.target_year %}有实际销量时另画一条绿线。{% endif %}拖动下面的滑块可以只看一段时间。</div>
+</div></div>
+
+<div class="card"><div class="card-body">
+  <h6 class="card-title" id="tableTitle">每月预测</h6>
+  <div class="table-responsive">
+    <table class="table table-sm table-hover align-middle mb-2" id="forecastTable">
+      <thead class="table-light"><tr><th>月份</th><th class="text-end">预测销量</th><th class="text-end">区间下限</th>
+        <th class="text-end">区间上限</th><th class="text-end">实际销量</th><th class="text-end">安全库存</th>
+        <th class="text-end">建议进货量</th></tr></thead>
+      <tbody></tbody>
+      <tfoot><tr class="fw-bold"><td>合计</td><td class="text-end" id="sumForecast"></td><td></td><td></td>
+        <td class="text-end" id="sumActual"></td><td></td><td class="text-end" id="sumPurchase"></td></tr></tfoot>
+    </table>
+  </div>
+  <div class="stat-note d-none" id="lowerNote"></div>
+  <div class="stat-note" id="purchaseText">{{ purchase_text }}</div>
+  <div class="stat-note">安全库存是为了应对实际销量比预测多的情况而多备的货，服务水平越高、补货周期越长，安全库存越多。单位都是件。</div>
+</div></div>
+
+<script id="resultConfig" type="application/json">{{ {"api": url_for("forecast.series", task_id=task.id), "subs": options.subs,
+    "targetYear": task.target_year} | tojson }}</script>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+{% if task.status == "已完成" %}
+<script src="{{ url_for('static', filename='vendor/echarts/echarts.min.js') }}"></script>
+{% endif %}
+<script src="{{ url_for('static', filename='js/forecast_result.js') }}"></script>
+{% endblock %}
